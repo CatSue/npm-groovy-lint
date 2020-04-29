@@ -48,7 +48,7 @@ Node.js >= 12 is required to run this package. If you can't upgrade, you can use
 | -f<br/> --files          | String  | Comma-separated list of Ant-style file patterns specifying files that must be included.<br/> Default: `"**/*.groovy,**/Jenkinsfile"`<br/>Examples:<br/> - `"**/Jenkinsfile"`<br/> - `"**/*.groovy"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | -o<br/> --output         | String  | Output format (txt,json,html,xml), or path to a file with one of these extensions<br/> Default: `txt`<br/> Examples:<br/> - `"txt"`<br/> - `"json"`<br/> - `"./logs/myLintResults.txt"`<br/> - `"./logs/myLintResults.json"`<br/> - `"./logs/myLintResults.html"`<br/> - `"./logs/myLintResults.xml"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -l<br/> --loglevel       | String  | Log level (error,warning or info)<br/>Default: info                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| -c<br/> --config         | String  | Custom path to [GroovyLint config file](#Configuration)<br/> Default: Browse current directory to find groovylintrc.json/js/yml/package.json config file, or default npm-groovy-lint config if not defined.<br/>Note: command-line arguments have priority on config file properties                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -c<br/> --config         | String  | Custom path to [GroovyLint config file](#Configuration), or preset config `recommended|recommended-jenkinsfile|all`<br/> Default: Browse current directory to find `.groovylintrc.json|js|yml|package.json` config file, or default npm-groovy-lint config if not defined.<br/>Note: command-line arguments have priority on config file properties                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --parse                  | Boolean | Try to compile the source code and return parse errors (works only with source argument)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --fix                    | Boolean | (beta) Automatically fix problems when possible<br/> See [Autofixable rules](#Autofixable-rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --format                 | Boolean | (beta) Format source code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -59,7 +59,7 @@ Node.js >= 12 is required to run this package. If you can't upgrade, you can use
 | -i<br/> --ignorepattern  | String  | Comma-separated list of Ant-style file patterns specifying files that must be ignored<br/> Default: none<br/> Example: `"**/test/*""`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | --failonerror            | Boolean | Fails if at least one error is found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --failonwarning          | Boolean | Fails if at least one warning is found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| --noserver               | Boolean | npm-groovy-lint launches a microservice to avoid performance issues caused by loading jaja/groovy everytime,that auto kills itself after 1h idle. Use this argument if you do not want to use this feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --noserver               | Boolean | npm-groovy-lint launches a microservice to avoid performance issues caused by loading java/groovy each time,that auto kills itself after 1h idle. Use this argument if you do not want to use this feature                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | --failoninfo             | Boolean | Fails if at least one error is found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --returnrules            | Boolean | Return rules descriptions and URL if set                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --codenarcargs           | String  | Use core CodeNarc arguments (all npm-groovy-lint arguments will be ignored)<br/> Doc: http://codenarc.github.io/CodeNarc/codenarc-command-line.html<br/> Example: `npm-groovy-lint --codenarcargs -basedir="jdeploy-bundle/lib/example" -rulesetfiles="file:jdeploy-bundle/lib/example/RuleSet-Groovy.groovy" -maxPriority1Violations=0 -report="xml:ReportTestCodenarc.xml`                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -75,7 +75,7 @@ Define a file named **.groovylintrc.json** (or .js or .YAML, or include in a pro
 
 Format : 
 
-- extends: Name of a base configuration ([`recommended`](https://github.com/nvuillam/npm-groovy-lint/blob/master/.groovylintrc-recommended.json) or [`all`](https://github.com/nvuillam/npm-groovy-lint/blob/master/.groovylintrc-all.json))
+- extends: Name of a base configuration ([`recommended`](https://github.com/nvuillam/npm-groovy-lint/blob/master/.groovylintrc-recommended.json), [`recommended-jenkinsfile`](https://github.com/nvuillam/npm-groovy-lint/blob/master/.groovylintrc-recommended-jenkinsfile.json), [`all`](https://github.com/nvuillam/npm-groovy-lint/blob/master/.groovylintrc-all.json))
 - rules: List of rules definition, following format `"RuleSection.RuleName": ruleParameters` or `"RuleName": ruleParameters`
     - "RuleSection.RuleName": any of the **[CodeNarc rules](https://codenarc.github.io/CodeNarc/codenarc-rule-index.html)** 
     - ruleParameters: can be just a severity override ( `"off"`, `"error"`, `"warning"`, `"info"` ) , or a property list :
@@ -83,7 +83,7 @@ Format :
         - enabled : true (default) or false
         - any of the [rule advanced properties](https://codenarc.github.io/CodeNarc/codenarc-rule-index.html)
 
-Example:
+Examples:
 
 ```json
 {
@@ -95,6 +95,19 @@ Example:
             "severity": "info"
         },
         "UnnecessaryReturnKeyword": "error"
+    }
+}
+```
+
+```json
+{
+    "extends": "recommended-jenkinsfile",
+    "rules": {
+        "CouldBeElvis": "off",
+        "CouldBeSwitchStatement": "off",
+        "VariableName": {
+            "severity": "info"
+        }
     }
 }
 ```
@@ -117,7 +130,76 @@ Example:
     $ npm-groovy-lint --codenarcargs -basedir="jdeploy-bundle/lib/example" -rulesetfiles="file:jdeploy-bundle/lib/example/RuleSet-Groovy.groovy" -title="TestTitleCodenarc" -maxPriority1Violations=0' -report="html:ReportTestCodenarc.html"
 ```
 
-# Autofixable rules (beta)
+# DISABLING RULES IN SOURCE
+
+You can disable rules directly by adding comment in file, using [eslint style](https://eslint.org/docs/user-guide/configuring#disabling-rules-with-inline-comments)
+
+To temporarily disable rule warnings in your file, use block comments in the following format:
+```groovy
+/* groovylint-disable */
+
+def variable = 1;
+
+/* groovylint-enable */
+```
+You can also disable or enable warnings for specific rules:
+```groovy
+/* groovylint-disable NoDef, UnnecessarySemicolon */
+
+def variable = 1;
+
+/* groovylint-enable NoDef, UnnecessarySemicolon */
+```
+To disable rule warnings in an entire file, put a /* groovylint-disable */ block comment at the top of the file:
+```groovy
+/* groovylint-disable */
+
+def variable = 1;
+```
+You can also disable or enable specific rules for an entire file:
+```groovy
+/* groovylint-disable NoDef */
+
+def variable = 1;
+```
+To disable all rules on a specific line, use a line or block comment in one of the following formats:
+```groovy
+def variable = 1; // groovylint-disable-line
+
+// groovylint-disable-next-line
+def variable = 1;
+
+/* groovylint-disable-next-line */
+def variable = 1;
+
+def variable = 1; /* groovylint-disable-line */
+```
+To disable a specific rule on a specific line:
+```groovy
+def variable = 1; // groovylint-disable-line NoDef
+
+// groovylint-disable-next-line NoDef
+def variable = 1;
+
+def variable = 1; /* groovylint-disable-line NoDef */
+
+/* groovylint-disable-next-line NoDef */
+def variable = 1;
+```
+To disable multiple rules on a specific line:
+```groovy
+def variable = 1; // groovylint-disable-line NoDef, UnnecessarySemicolon
+
+// groovylint-disable-next-line NoDef, UnnecessarySemicolon
+def variable = 1;
+
+def variable = 1; /* groovylint-disable-line NoDef, UnnecessarySemicolon */
+
+/* groovylint-disable-next-line NoDef, UnnecessarySemicolon */
+def variable = 1;
+```
+
+# AUTO-FIXABLE RULES (beta)
 
 - BlockEndsWithBlankLine
 - BlockStartsWithBlankLine
@@ -153,7 +235,7 @@ Example:
 
 [Contribute](#Contribute) to add more [rules](http://codenarc.github.io/CodeNarc/codenarc-rule-index.html) fixes :)
 
-# Call via JS module
+# CALL VIA JS MODULE
 
 You can import npm-groovy-lint into your NPM package and call lint & fix via module, using the same options than from npm-groovy-lint command line
 
@@ -195,7 +277,7 @@ This package uses :
 - jdeploy : https://github.com/shannah/jdeploy (jar deployment and run)
 - slf4j : http://www.slf4j.org/ (logging for CodeNarc)
 - log4j : https://logging.apache.org/log4j/2.x/ (logging for CodeNarc)
-- GMetrics : https://dx42.github.io/gmetrics/ (Code mesures for CodeNarc)
+- GMetrics : https://dx42.github.io/gmetrics/ (Code measures for CodeNarc)
 - Inspiration from [eslint](https://eslint.org/) about configuration and run patterns
 
 

@@ -151,7 +151,7 @@ module.exports = optionator({
             option: "noserver",
             type: "Boolean",
             description:
-                "For better perfs, npm-groovy-lint runs a local server to eep CodeNarc alive instead of loading java/groovy at each call. If you don't want that, send this argument"
+                "For better performances, npm-groovy-lint runs a local server to eep CodeNarc alive instead of loading java/groovy at each call. If you don't want that, send this argument"
         },
         {
             option: "serverhost",
@@ -197,13 +197,32 @@ module.exports = optionator({
     mutuallyExclusive: [
         ["files", "source", "codenarcargs", "help", "version"],
         ["failonerror", "failonwarning", "failoninfo"],
-        ["codenarcargs", ["failonerror", "failonwarning", "failoninfo", "path", "files", "source", "fix", "fixrules", "config"]],
+        [
+            "codenarcargs",
+            [
+                "failonerror",
+                "failonwarning",
+                "failoninfo",
+                "path",
+                "files",
+                "source",
+                "format",
+                "fix",
+                "fixrules",
+                "config",
+                "returnrules",
+                "killserver",
+                "nolintafter",
+                "noserver",
+                "serverhost",
+                "serverport"
+            ]
+        ],
         ["noserver", ["serverhost", "serverport", "killserver"]],
         ["fix", "format"],
         [
             ["fix", "format"],
             ["failonerror", "failonwarning", "failoninfo"]
-        ],
-        ["format", "config"]
+        ]
     ]
 });

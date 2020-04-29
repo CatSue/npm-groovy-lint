@@ -19,6 +19,7 @@ class NpmGroovyLint {
 
     // Internal
     origin = "initialCall";
+    requestKey;
     jdeployFile;
     jdeployFilePlanB;
     jdeployRootPath;
@@ -54,6 +55,7 @@ class NpmGroovyLint {
         this.jdeployRootPath = internalOpts.jdeployRootPath || process.env.JDEPLOY_ROOT_PATH || __dirname;
         this.parseOptions = internalOpts.parseOptions !== false;
         this.origin = internalOpts.origin || this.origin;
+        this.requestKey = internalOpts.requestKey;
     }
 
     // Run linting (and fixing if --fix)
@@ -72,8 +74,7 @@ class NpmGroovyLint {
     async fixErrors(errorIds, optns = {}) {
         // Create and run fixer
         debug(`Fix errors for ${JSON.stringify(errorIds)} on existing NpmGroovyLint instance`);
-        const codeNarcFactoryResult = await prepareCodeNarcCall(this.options, this.jdeployRootPath);
-        this.setMethodResult(codeNarcFactoryResult);
+        await this.preProcess();
         this.fixer = new NpmGroovyLintFix(
             this.lintResult,
             {
@@ -103,6 +104,11 @@ class NpmGroovyLint {
         return await getConfigFileName(path || this.options.path || this.options.config, this.options.sourcefilepath);
     }
 
+    // Returns the loaded config
+    async loadConfig(configFilePath, mode = "lint") {
+        return await loadConfig(configFilePath, mode, null, []);
+    }
+
     // Actions before call to CodeNarc
     async preProcess() {
         // Manage when the user wants to use only codenarc args
@@ -120,7 +126,7 @@ class NpmGroovyLint {
                 const configProperties = await loadConfig(
                     this.options.config || this.options.path,
                     this.options.format ? "format" : "lint",
-                    this.options.sourcefilepath
+                    this.options.sourcefilepath || this.options.path
                 );
                 for (const configProp of Object.keys(configProperties)) {
                     if (this.options[configProp] == null) {
@@ -129,10 +135,25 @@ class NpmGroovyLint {
                 }
             } catch (error) {
                 this.status = 2;
-                throw new Error(error.message);
+                throw new Error(error.message + "\n" + error.stack);
             }
         } else {
             this.options = this.args;
+        }
+
+        // Kill running CodeNarcServer
+        if (this.options.killserver) {
+            const startPerf = performance.now();
+            const codeNarcCaller = new CodeNarcCaller(this.codenarcArgs, this.serverStatus, this.args, this.options, {
+                jdeployFile: this.jdeployFile,
+                jdeployFilePlanB: this.jdeployFilePlanB,
+                jdeployRootPath: this.jdeployRootPath,
+                groovyFileName: this.tmpGroovyFileName
+            });
+            this.outputString = await codeNarcCaller.killCodeNarcServer();
+            console.info(this.outputString);
+            this.manageStats(startPerf);
+            return false;
         }
 
         // Show version
@@ -170,21 +191,6 @@ class NpmGroovyLint {
             return false;
         }
 
-        // Kill running CodeNarcServer
-        if (this.options.killserver) {
-            const startPerf = performance.now();
-            const codeNarcCaller = new CodeNarcCaller(this.codenarcArgs, this.serverStatus, this.args, this.options, {
-                jdeployFile: this.jdeployFile,
-                jdeployFilePlanB: this.jdeployFilePlanB,
-                jdeployRootPath: this.jdeployRootPath,
-                groovyFileName: this.tmpGroovyFileName
-            });
-            this.outputString = await codeNarcCaller.killCodeNarcServer();
-            console.info(this.outputString);
-            this.manageStats(startPerf);
-            return false;
-        }
-
         // Prepare CodeNarc call then set result on NpmGroovyLint instance
         const codeNarcFactoryResult = await prepareCodeNarcCall(this.options, this.jdeployRootPath);
         this.setMethodResult(codeNarcFactoryResult);
@@ -205,7 +211,8 @@ class NpmGroovyLint {
             jdeployFile: this.jdeployFile,
             jdeployFilePlanB: this.jdeployFilePlanB,
             jdeployRootPath: this.jdeployRootPath,
-            groovyFileName: this.tmpGroovyFileName ? this.tmpGroovyFileName : null
+            groovyFileName: this.tmpGroovyFileName ? this.tmpGroovyFileName : null,
+            requestKey: this.requestKey || null
         });
         if (!this.options.noserver) {
             serverCallResult = await codeNarcCaller.callCodeNarcServer();
@@ -219,8 +226,12 @@ class NpmGroovyLint {
 
     // After CodeNarc call
     async postProcess() {
+        // Cancelled request
+        if (this.status === 9) {
+            console.info(`GroovyLint: Request cancelled by duplicate call on requestKey ${this.requestKey}`);
+        }
         // CodeNarc error
-        if ((this.codeNarcStdErr && [null, "", undefined].includes(this.codeNarcStdOut)) || this.status > 0) {
+        else if ((this.codeNarcStdErr && [null, "", undefined].includes(this.codeNarcStdOut)) || this.status > 0) {
             this.status = 2;
             console.error("GroovyLint: Error running CodeNarc: \n" + this.codeNarcStdErr);
         }
@@ -318,7 +329,7 @@ class NpmGroovyLint {
         if (this.options.source) {
             fixAgainOptions.source = this.lintResult.files[0].updatedSource;
         }
-        // Lint & fix again only the requested rules for better perfs
+        // Lint & fix again only the requested rules for better performances
         delete fixAgainOptions.format;
         delete fixAgainOptions.rules;
         fixAgainOptions.rulesets = fixRules.join(",");
@@ -326,7 +337,7 @@ class NpmGroovyLint {
         fixAgainOptions.fixrules = fixRules.join(",");
         fixAgainOptions.output = "none";
         // Process lint & fix
-        debug(`Fix triggered rule necessing another lint & fix, do it again with options ${JSON.stringify(fixAgainOptions)}`);
+        debug(`Fix triggered rule requiring another lint & fix, do it again with options ${JSON.stringify(fixAgainOptions)}`);
         const newLinter = new NpmGroovyLint(fixAgainOptions, {
             jdeployFile: this.jdeployFile,
             jdeployRootPath: this.jdeployRootPath,
@@ -361,10 +372,13 @@ class NpmGroovyLint {
     mergeFixAgainResults(lintResToUpdate, lintResAfterNewFix) {
         if (lintResToUpdate.files && lintResToUpdate.files[0]) {
             if (Object.keys(lintResAfterNewFix.files).length > 0) {
-                const updtSource = lintResAfterNewFix.files[Object.keys(lintResAfterNewFix.files)[0]].updatedSource;
-                lintResToUpdate.files[0] = Object.assign(lintResToUpdate.files[0], { updatedSource: updtSource });
+                const key = Object.keys(lintResAfterNewFix.files)[0];
+                const updtSource = lintResAfterNewFix.files[key].updatedSource;
+                if (updtSource) {
+                    lintResToUpdate.files[0] = Object.assign(lintResToUpdate.files[0], { updatedSource: updtSource });
+                }
             }
-        } else {
+        } else if (lintResAfterNewFix && lintResAfterNewFix.files) {
             for (const afterNewFixResFileNm of Object.keys(lintResAfterNewFix.files)) {
                 // Set updatedSource in results in provided
                 if (lintResAfterNewFix.files[afterNewFixResFileNm].updatedSource) {

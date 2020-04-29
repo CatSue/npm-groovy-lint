@@ -35,7 +35,7 @@ class CodeNarcCaller {
     // Call local CodeNarc server if running
     async callCodeNarcServer() {
         // If use of --codenarcargs, get default values for CodeNarcServer host & port
-        const serverUri = this.getCodeNarcServerUri();
+        const requestUri = this.getCodeNarcServerUri() + "/request";
         // Remove "" around values because they won't get thru system command line parser
         const codeNarcArgsForServer = this.codenarcArgs.map(codeNarcArg => {
             if (codeNarcArg.includes('="') || codeNarcArg.includes(':"')) {
@@ -48,11 +48,12 @@ class CodeNarcCaller {
         const codeNarcArgsString = codeNarcArgsForServer.join(" ");
         const rqstOptions = {
             method: "POST",
-            uri: serverUri,
+            uri: requestUri,
             body: {
                 codeNarcArgs: codeNarcArgsString,
                 parse: this.options.parse ? true : false,
-                file: this.execOpts.groovyFileName ? this.execOpts.groovyFileName : null
+                file: this.execOpts.groovyFileName ? this.execOpts.groovyFileName : null,
+                requestKey: this.execOpts.requestKey || null
             },
             json: true
         };
@@ -63,7 +64,7 @@ class CodeNarcCaller {
             parsedBody = await rp(rqstOptions);
             this.serverStatus = "running";
             const elapsed = parseInt(performance.now() - startCodeNarc, 10);
-            debug(`CodeNarc runned in ${elapsed} ms and returned ${JSON.stringify(parsedBody)}`);
+            debug(`CodeNarc run in ${elapsed} ms and returned ${JSON.stringify(parsedBody)}`);
         } catch (e) {
             // If server not started , start it and try again
             if (
@@ -75,6 +76,12 @@ class CodeNarcCaller {
                 if (this.serverStatus === "running") {
                     return await this.callCodeNarcServer();
                 }
+            }
+            // Cancelled codeNarcAction (duplicate)
+            else if (e.cause && e.cause.code == "ECONNRESET") {
+                return {
+                    status: 9
+                };
             } else {
                 console.error("CodeNarcServer http call unexpected error:\n" + JSON.stringify(e, null, 2));
             }
@@ -89,6 +96,14 @@ class CodeNarcCaller {
                 codeNarcStdOut: parsedBody.stdout,
                 codeNarcStdErr: parsedBody.stderr,
                 status: 0
+            };
+        }
+        // Cancelled codeNarcAction (duplicate) (TODO: Update CodeNarcServer.groovy to cleanly stop task and not kill the thread !)
+        else if (parsedBody.status === "cancelledByDuplicateRequest") {
+            return {
+                codeNarcStdOut: parsedBody.stdout,
+                codeNarcStdErr: parsedBody.stderr,
+                status: 9
             };
         }
         // Codenarc error
@@ -167,6 +182,7 @@ class CodeNarcCaller {
         const serverPingUri = this.getCodeNarcServerUri() + "/ping";
         let interval;
         debug(`ATTEMPT to start CodeNarcServer with ${jDeployCommand}`);
+
         try {
             // Start server using java (we don't care the promise result, as the following promise will poll the server)
             let stop = false;
@@ -179,6 +195,7 @@ class CodeNarcCaller {
                 });
             // Poll it until it is ready
             const start = performance.now();
+            let notified = false;
             await new Promise(resolve => {
                 interval = setInterval(() => {
                     // If java call crashed, don't bother polling
@@ -191,7 +208,10 @@ class CodeNarcCaller {
                         .on("response", response => {
                             if (response.statusCode === 200) {
                                 this.serverStatus = "running";
-                                debug(`SUCCESS: CodeNarcServer is running`);
+                                if (notified === false) {
+                                    debug(`SUCCESS: CodeNarcServer is running`);
+                                    notified = true;
+                                }
                                 clearInterval(interval);
                                 resolve();
                             } else if (this.serverStatus === "unknown" && performance.now() - start > maxAttemptTimeMs) {
@@ -236,7 +256,7 @@ class CodeNarcCaller {
         console.log(errMsg);
     }
 
-    // Kill CodeNarc server by tellim it to do so
+    // Kill CodeNarc server by telling it to do so
     async killCodeNarcServer() {
         const serverUri = this.getCodeNarcServerUri() + "/kill";
         let outputString = "";
